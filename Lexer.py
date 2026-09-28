@@ -9,8 +9,9 @@ LETTERS = set(string.ascii_letters)
 NONZERO = set("123456789")
 NUMBERS = set("0123456789")
 ASCII = set(string.printable)
-GLYPH_ASCII = {"'"}
-INSC_ASCII = {'"'}
+GLYPH_ASCII = ASCII - {"'", "\n", "\r"}
+INSC_ASCII = ASCII - {'"', "\n", "\r"}
+ESCAPE_MAP = {'n': '\n', 't': '\t', 'r': '\r', "'": "'", '"': '"', '\\': '\\'}
 
 # WHITESPACE & PUNCTUATION
 WHITESPACE = {" ", "\t"}
@@ -290,7 +291,7 @@ class Lexer:
                 self.advance()
                 closed = False
                 while self.current() is not None:
-                    if self.current == "/" and self.peek() == "#":
+                    if self.current() == "/" and self.peek() == "#":
                         self.advance()
                         self.advance()
                         closed = True
@@ -316,13 +317,20 @@ class Lexer:
             word += self.advance()
 
         if word in self.keywords:
-            self.verify_delimiter(f"keyword '{word}f'", self.keywords[word])
+            self.verify_delimiter(f"keyword '{word}'", self.keywords[word])
             if word in {"blessed", "cursed"}:
                 return Token("AURA_LIT", word, self.line, start_col)
             elif word == "null":
                 return Token("NULL_LIT", word, self.line, start_col)
             return Token("KEYWORD", word, self.line, start_col)
 
+        if len(word) > 16:
+            raise LexerError(
+                f"Identifier '{word}' exceeds maximum length of 16 characters ({len(word)} chars)",
+                self.line,
+                start_col,
+            )
+        
         self.verify_delimiter(f"identifier '{word}'", ID_DEL)
         return Token("IDENTIFIER", word, self.line, start_col)
 
@@ -349,43 +357,119 @@ class Lexer:
             return Token("AETHER_LIT", num_str, self.line, start_col)
 
     def scan_inscription(self) -> Token:
-        start_col = self.col
-        self.advance()
-        val = ""
-
-        while self.current() is not None and self.current() != '"':
-            if self.current() == "\n":
+            start_col = self.col
+            self.advance()  # consume opening '"'
+            val = ""
+    
+            while self.current() is not None and self.current() != '"':
+                # Disallow raw newline/carriage return inside strings
+                if self.current() in {'\n', '\r'}:
+                    raise LexerError(
+                        "Unclosed inscription literal before newline", self.line, start_col
+                    )
+    
+                # Handle Escape Sequences (\n, \t, \r, \", \', \\)
+                if self.current() == "\\":
+                    self.advance()  # consume '\'
+                    esc = self.current()
+    
+                    if esc is None:
+                        raise LexerError(
+                            "Unclosed inscription literal after escape character",
+                            self.line,
+                            start_col,
+                        )
+    
+                    if esc in ESCAPE_MAP:
+                        val += ESCAPE_MAP[esc]
+                        self.advance()
+                    else:
+                        raise LexerError(
+                            f"Invalid escape sequence '\\{esc}' in inscription literal",
+                            self.line,
+                            self.col,
+                        )
+    
+                # Standard ASCII content validation
+                else:
+                    if self.current() not in INSC_ASCII:
+                        raise LexerError(
+                            f"Invalid character {repr(self.current())} in inscription literal",
+                            self.line,
+                            self.col,
+                        )
+                    val += self.advance()
+    
+            if self.current() is None:
                 raise LexerError(
-                    "Unclosed inscription literal before newline", self.line, start_col
+                    "Unclosed inscription literal at EOF", self.line, start_col
                 )
-            val += self.advance()
-
-        if self.current() is None:
-            raise LexerError(
-                "Unclosed inscription literal at EOF", self.line, start_col
-            )
-
-        self.advance()
-        self.verify_delimiter("inscription literal", INSCRIPTION_LIT_DEL)
-        return Token("INSCRIPTION_LIT", val, self.line, start_col)
+    
+            self.advance() 
+            self.verify_delimiter("inscription literal", INSCRIPTION_LIT_DEL)
+            return Token("INSCRIPTION_LIT", val, self.line, start_col)
 
     def scan_glyph(self) -> Token:
-        start_col = self.col
-        self.advance()
-
-        if self.current() is None or self.current() == "'":
-            raise LexerError("Empty glyph literal", self.line, start_col)
-
-        char_val = self.advance()
-
-        if self.current() != "'":
-            raise LexerError(
-                "Glyph must contain exactly one character", self.line, start_col
-            )
-
-        self.advance()
-        self.verify_delimiter("glyph literal", GLYPH_LIT_DEL)
-        return Token("GLYPH_LIT", char_val, self.line, start_col)
+            start_col = self.col
+            self.advance()  # consume opening "'"
+            val = ""
+    
+            while self.current() is not None and self.current() != "'":
+                # Disallow raw newline/carriage return inside glyphs
+                if self.current() in {'\n', '\r'}:
+                    raise LexerError(
+                        "Unclosed glyph literal before newline", self.line, start_col
+                    )
+    
+                # Handle Escape Sequences (\n, \t, \r, \', \", \\)
+                if self.current() == "\\":
+                    self.advance()  # consume '\'
+                    esc = self.current()
+    
+                    if esc is None:
+                        raise LexerError(
+                            "Unclosed glyph literal after escape character",
+                            self.line,
+                            start_col,
+                        )
+    
+                    if esc in ESCAPE_MAP:
+                        val += ESCAPE_MAP[esc]
+                        self.advance()
+                    else:
+                        raise LexerError(
+                            f"Invalid escape sequence '\\{esc}' in glyph literal",
+                            self.line,
+                            self.col,
+                        )
+    
+                # Standard ASCII content validation
+                else:
+                    if self.current() not in GLYPH_ASCII:
+                        raise LexerError(
+                            f"Invalid character {repr(self.current())} in glyph literal",
+                            self.line,
+                            self.col,
+                        )
+                    val += self.advance()
+    
+            if self.current() is None:
+                raise LexerError(
+                    "Unclosed glyph literal at EOF", self.line, start_col
+                )
+    
+            self.advance()  # consume closing "'"
+    
+            # Enforce glyph length limit: at most 1 character (allows 0 for '' or 1 for 'a' / '\n')
+            if len(val) > 1:
+                raise LexerError(
+                    f"Glyph literal cannot exceed 1 character (got {len(val)})",
+                    self.line,
+                    start_col,
+                )
+    
+            self.verify_delimiter("glyph literal", GLYPH_LIT_DEL)
+            return Token("GLYPH_LIT", val, self.line, start_col)
 
 # ========== SYMBOLS SCANNING ==========
     def scan_symbol(self) -> Token:
@@ -418,10 +502,10 @@ class Lexer:
         elif ch == "*":
             if self.match("="):
                 self.verify_delimiter("*=", ASSIGN_DEL)
-                return Token("MUL_ASSIGN", "*", self.line, start_col)
+                return Token("MUL_ASSIGN", "*=", self.line, start_col)
             else:
                 self.verify_delimiter("operator '*'", MATH_DEL)
-                return Token("MATH_OP", "/", self.line, start_col)
+                return Token("MATH_OP", "*", self.line, start_col)
 
         elif ch == "/":
             if self.match("="):
@@ -526,3 +610,60 @@ class Lexer:
         raise LexerError(f"Unexpected character '{ch}'", self.line, start_col)
 
 # ========== TOKENIZER ==========
+    def tokenize(self) -> List[Token]:
+        """Main driver loop iterating through the source string."""
+        while self.pos < len(self.source):
+            self.skip_whitespace_and_comments()
+            ch = self.current()
+            if ch is None:
+                break
+
+            if ch in LETTERS:
+                self.tokens.append(self.scan_identifier_or_keyword())
+            elif ch in NUMBERS:
+                self.tokens.append(self.scan_number())
+            elif ch == '"':
+                self.tokens.append(self.scan_inscription())
+            elif ch == "'":
+                self.tokens.append(self.scan_glyph())
+            else:
+                self.tokens.append(self.scan_symbol())
+
+        self.tokens.append(Token("EOF", "EOF", self.line, self.col))
+        return self.tokens
+
+
+# ===================================================================================================
+# TESTING
+# ===================================================================================================
+
+if __name__ == "__main__":
+    sample_program = """
+    #/ Program Initialization /#
+    #conjure "combat"~
+
+    circle Mage {
+        spell aether health[3] = {100, 75, 50}~
+        essence mana = 25.5~
+        glyph rank = 'S'~
+        aura isAlive = blessed~
+    }~
+
+    grimoire() {
+        manifest (mana != 0.0) {
+            mana -= 5.0~
+        } counter {
+            shatter~
+        }
+    }
+    """
+
+    print("--- TOKENIZING MAGI-C PROGRAM ---\n")
+    try:
+        lexer = Lexer(sample_program)
+        token_stream = lexer.tokenize()
+        for tok in token_stream:
+            print(tok)
+        print("\nLexical Analysis Completed Successfully: 0 Errors.")
+    except LexerError as err:
+        print(err)
