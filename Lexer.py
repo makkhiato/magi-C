@@ -274,7 +274,7 @@ class Lexer:
                 self.col,
             )
 
-    # ========== WHITESPACE AND COMMENTS TRIMMER ==========
+# ========== WHITESPACE AND COMMENTS TRIMMER ==========
     def skip_whitespace_and_comments(self):
         """Silently consumes spaces, tabs, newlines, and block commments (#/ /#)."""
         while self.current() is not None:
@@ -303,7 +303,7 @@ class Lexer:
             else:
                 break
 
-    # ========== WORDS SCANNER (KEYWORDS, AURA LITERAL, NULL, IDENTIFIERS) ==========
+# ========== WORDS SCANNER (KEYWORDS, AURA LITERAL, NULL, IDENTIFIERS) ==========
     def scan_identifier_or_keyword(self) -> Token:
         start_col = self.col
         word = ""
@@ -326,7 +326,7 @@ class Lexer:
         self.verify_delimiter(f"identifier '{word}'", ID_DEL)
         return Token("IDENTIFIER", word, self.line, start_col)
 
-    # ========== LITERALS SCANNER (NUMBERS, GLYPHS, INSCRIPTION) ==========
+# ========== LITERALS SCANNER (NUMBERS, GLYPHS, INSCRIPTION) ==========
     def scan_number(self) -> Token:
         start_col = self.col
         num_str = ""
@@ -387,7 +387,7 @@ class Lexer:
         self.verify_delimiter("glyph literal", GLYPH_LIT_DEL)
         return Token("GLYPH_LIT", char_val, self.line, start_col)
 
-    # ========== SYMBOLS SCANNING ==========
+# ========== SYMBOLS SCANNING ==========
     def scan_symbol(self) -> Token:
         start_col = self.col
         ch = self.advance()
@@ -410,3 +410,119 @@ class Lexer:
                 return Token("DEC_OP", "--", self.line, start_col)
             elif self.match("="):
                 self.verify_delimiter("operator '-='", ASSIGN_DEL)
+                return Token("SUB_ASSIGN", "-=", self.line, start_col)
+            else:
+                self.verify_delimiter("operator '-'", MINUS_DEL)
+                return Token("MATH_OP", "-", self.line, start_col)
+
+        elif ch == "*":
+            if self.match("="):
+                self.verify_delimiter("*=", ASSIGN_DEL)
+                return Token("MUL_ASSIGN", "*", self.line, start_col)
+            else:
+                self.verify_delimiter("operator '*'", MATH_DEL)
+                return Token("MATH_OP", "/", self.line, start_col)
+
+        elif ch == "/":
+            if self.match("="):
+                self.verify_delimiter("operator '/='", ASSIGN_DEL)
+                return Token("DIV_ASSIGN", "/=", self.line, start_col)
+            else:
+                self.verify_delimiter("operator '/'", MATH_DEL)
+                return Token("MATH_OP", "/", self.line, start_col)
+
+        elif ch == "%":
+            if self.match("="):
+                self.verify_delimiter("operator '%='", ASSIGN_DEL)
+                return Token("MOD_ASSIGN", "%=", self.line, start_col)
+            else:
+                self.verify_delimiter("operator '%'", MATH_DEL)
+                return Token("MATH_OP", "%", self.line, start_col)
+
+        
+        # RELATIONAL OPERATORS
+        elif ch == "=":
+            if self.match("="):
+                self.verify_delimiter("operator '='", REL_LOG_DEL)
+                return Token("REL_OP", "==", self.line, start_col)
+            else:
+                self.verify_delimiter("operator '='", BASE_ASSIGN_DEL)
+                return Token("ASSIGN_OP", "=",self.line, start_col)
+            
+        elif ch == "!":
+            if self.match("="):
+                self.verify_delimiter("operator '!='", REL_LOG_DEL)
+                return Token("REL_OP", "!=",self.line, start_col)
+            else:
+                self.verify_delimiter("operator '!'", NOT_DEL)
+                return Token("NOT_OP", "!",self.line, start_col)
+
+        elif ch == "<":
+            if self.match("="):
+                self.verify_delimiter("operator '<='", REL_LOG_DEL)
+                return Token("REL_OP", "<=",self.line, start_col)
+            else:
+                self.verify_delimiter("operator '<'", REL_LOG_DEL)
+                return Token("REL_OP", "<",self.line, start_col)
+
+        elif ch == ">":
+            if self.match("="):
+                self.verify_delimiter("operator '>='", REL_LOG_DEL)
+                return Token("REL_OP", ">=",self.line, start_col)
+            else:
+                self.verify_delimiter("operator '>'", REL_LOG_DEL)
+                return Token("REL_OP", ">",self.line, start_col)
+
+        # LOGICAL OPERATORS
+        elif ch == "&":
+            if self.match("&"):
+                self.verify_delimiter("operator '&&'", REL_LOG_DEL)
+                return Token("LOG_OP", "&&",self.line, start_col)
+            else:
+                raise LexerError("Standalone '&' is invalid", self.line, start_col)
+
+        elif ch == "|":
+            if self.match("|"):
+                self.verify_delimiter("operator '||'", REL_LOG_DEL)
+                return Token("LOG_OP", "||",self.line, start_col)
+            else:
+                raise LexerError("Standalone '|' is invalid", self.line, start_col)
+
+        # GROUPING & INDEXING
+        elif ch == "(":
+            self.verify_delimiter("symbol '('", OPEN_PAREN_DEL)
+            return Token("OPEN_PAREN", "(",self.line, start_col)
+        elif ch == ")":
+            self.verify_delimiter("symbol ')'", CLOSE_PAREN_DEL)
+            return Token("CLOSE_PAREN", ")",self.line, start_col)
+        elif ch == "{":
+            self.verify_delimiter("symbol '{'", OPEN_CURLY_DEL)
+            return Token("OPEN_CURLY", "{",self.line, start_col)
+        elif ch == "}":
+            self.verify_delimiter("symbol '}'", CLOSE_CURLY_DEL)
+            return Token("CLOSE_CURLY", "}",self.line, start_col)
+        elif ch == "[":
+            self.verify_delimiter("symbol '['", OPEN_BRACKET_DEL)
+            return Token("OPEN_BRACKET", "[",self.line, start_col)
+        elif ch == "]":
+            self.verify_delimiter("symbol ']'", CLOSE_BRACKET_DEL)
+            return Token("CLOSE_BRACKET", "]",self.line, start_col)
+
+        # PUNCTUATION & DIRECTIVES
+        elif ch == "~":
+            self.verify_delimiter("terminator '~'", TERMINATOR_DEL)
+            return Token("TERMINATOR", "~",self.line, start_col)
+        elif ch == ",":
+            self.verify_delimiter("separator ','", COMMA_DEL)
+            return Token("COMMA", ",",self.line, start_col)
+        elif ch == ".":
+            self.verify_delimiter("symbol '.'", LETTERS)
+            return Token("DOT", ".",self.line, start_col)
+        elif ch == "#":
+            self.verify_delimiter("directive hash '#'", CONJURE_DEL)
+            return Token("DIRECTIVE_HASH", "#",self.line, start_col)
+
+
+        raise LexerError(f"Unexpected character '{ch}'", self.line, start_col)
+
+# ========== TOKENIZER ==========
