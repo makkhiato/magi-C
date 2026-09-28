@@ -272,3 +272,28 @@ class Lexer:
                 self.line,
                 self.col,
             )
+
+# ========== WHITESPACE AND COMMENTS TRIMMER ==========
+    def skip_whitespace_and_comments(self):
+        """Silently consumes spaces, tabs, newlines, and block commments (#/ /#)."""
+        while self.current() is not None:
+            ch = self.current()
+            if ch in SPACE_DEL:
+                self.advance()
+            elif ch == "#" and self.peek() == "/":
+                start_line, start_col, = self.line, self.col
+                self.advance()
+                self.advance()
+                closed = False
+                while self.current() is not None:
+                    if self.current == "/" and self.peek() == "#":
+                        self.advance()
+                        self.advance()
+                        closed = True
+                        break
+                    self.advance()
+                if not closed:
+                    raise LexerError("Unclosed comment block '#/'", start_line, start_col)
+            else:
+                break
+            
