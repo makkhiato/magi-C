@@ -2,7 +2,6 @@ import string
 from dataclasses import dataclass
 from typing import List, Optional
 
-
 # ========== DELIMITERS & CHARACTER DEFINITIONS ==========
 
 # CHARACTER SETS
@@ -167,6 +166,7 @@ AURA_LIT_DEL = (
 
 # ========== TOKEN STRUCTURE & CURSOR NAVIGATION ==========
 
+
 @dataclass
 class Token:
     type: str
@@ -242,7 +242,7 @@ class Lexer:
         next_pos = self.pos + 1
         return self.source[next_pos] if next_pos < len(self.source) else None
 
-    def advance(self) -> Optional[str]:
+    def advance(self) -> str:
         """Consumes the current character and updates coordinate tracking."""
         ch = self.current()
         if ch is not None:
@@ -252,7 +252,8 @@ class Lexer:
                 self.col = 1
             else:
                 self.col += 1
-        return ch
+            return ch
+        return ""
 
     def match(self, expected: str) -> bool:
         """Consumes the current character if it matches expected."""
@@ -273,7 +274,7 @@ class Lexer:
                 self.col,
             )
 
-# ========== WHITESPACE AND COMMENTS TRIMMER ==========
+    # ========== WHITESPACE AND COMMENTS TRIMMER ==========
     def skip_whitespace_and_comments(self):
         """Silently consumes spaces, tabs, newlines, and block commments (#/ /#)."""
         while self.current() is not None:
@@ -281,7 +282,10 @@ class Lexer:
             if ch in SPACE_DEL:
                 self.advance()
             elif ch == "#" and self.peek() == "/":
-                start_line, start_col, = self.line, self.col
+                (
+                    start_line,
+                    start_col,
+                ) = self.line, self.col
                 self.advance()
                 self.advance()
                 closed = False
@@ -293,7 +297,116 @@ class Lexer:
                         break
                     self.advance()
                 if not closed:
-                    raise LexerError("Unclosed comment block '#/'", start_line, start_col)
+                    raise LexerError(
+                        "Unclosed comment block '#/'", start_line, start_col
+                    )
             else:
                 break
-            
+
+    # ========== WORDS SCANNER (KEYWORDS, AURA LITERAL, NULL, IDENTIFIERS) ==========
+    def scan_identifier_or_keyword(self) -> Token:
+        start_col = self.col
+        word = ""
+
+        while self.current() is not None and (
+            self.current() in LETTERS
+            or self.current() in NUMBERS
+            or self.current() == "_"
+        ):
+            word += self.advance()
+
+        if word in self.keywords:
+            self.verify_delimiter(f"keyword '{word}f'", self.keywords[word])
+            if word in {"blessed", "cursed"}:
+                return Token("AURA_LIT", word, self.line, start_col)
+            elif word == "null":
+                return Token("NULL_LIT", word, self.line, start_col)
+            return Token("KEYWORD", word, self.line, start_col)
+
+        self.verify_delimiter(f"identifier '{word}'", ID_DEL)
+        return Token("IDENTIFIER", word, self.line, start_col)
+
+    # ========== LITERALS SCANNER (NUMBERS, GLYPHS, INSCRIPTION) ==========
+    def scan_number(self) -> Token:
+        start_col = self.col
+        num_str = ""
+        is_essence = False
+
+        while self.current() is not None and self.current() in NUMBERS:
+            num_str += self.advance()
+
+        if self.current() == "." and self.peek() in NUMBERS:
+            is_essence = True
+            num_str += self.advance()
+            while self.current() is not None and self.current() in NUMBERS:
+                num_str += self.advance()
+
+        if is_essence:
+            self.verify_delimiter(f"essence literal '{num_str}'", ESSENCE_LIT_DEL)
+            return Token("ESSENCE_LIT", num_str, self.line, start_col)
+        else:
+            self.verify_delimiter(f"aether literal '{num_str}'", AETHER_LIT_DEL)
+            return Token("AETHER_LIT", num_str, self.line, start_col)
+
+    def scan_inscription(self) -> Token:
+        start_col = self.col
+        self.advance()
+        val = ""
+
+        while self.current() is not None and self.current() != '"':
+            if self.current() == "\n":
+                raise LexerError(
+                    "Unclosed inscription literal before newline", self.line, start_col
+                )
+            val += self.advance()
+
+        if self.current() is None:
+            raise LexerError(
+                "Unclosed inscription literal at EOF", self.line, start_col
+            )
+
+        self.advance()
+        self.verify_delimiter("inscription literal", INSCRIPTION_LIT_DEL)
+        return Token("INSCRIPTION_LIT", val, self.line, start_col)
+
+    def scan_glyph(self) -> Token:
+        start_col = self.col
+        self.advance()
+
+        if self.current() is None or self.current() == "'":
+            raise LexerError("Empty glyph literal", self.line, start_col)
+
+        char_val = self.advance()
+
+        if self.current() != "'":
+            raise LexerError(
+                "Glyph must contain exactly one character", self.line, start_col
+            )
+
+        self.advance()
+        self.verify_delimiter("glyph literal", GLYPH_LIT_DEL)
+        return Token("GLYPH_LIT", char_val, self.line, start_col)
+
+    # ========== SYMBOLS SCANNING ==========
+    def scan_symbol(self) -> Token:
+        start_col = self.col
+        ch = self.advance()
+
+        # MATH & ASSIGNMENT OPERATORS
+        if ch == "+":
+            if self.match("+"):
+                self.verify_delimiter("operator '++'", CREMENT_DEL)
+                return Token("INC_OP", "++", self.line, start_col)
+            elif self.match("="):
+                self.verify_delimiter("operator '+='", ASSIGN_DEL)
+                return Token("ADD_ASSIGN", "+=", self.line, start_col)
+            else:
+                self.verify_delimiter("operator '+'", MATH_DEL)
+                return Token("MATH_OP", "+", self.line, start_col)
+
+        elif ch == "-":
+            if self.match("-"):
+                self.verify_delimiter("operator '--'", CREMENT_DEL)
+                return Token("DEC_OP", "--", self.line, start_col)
+            elif self.match("="):
+                self.verify_delimiter("operator '-='", ASSIGN_DEL)
