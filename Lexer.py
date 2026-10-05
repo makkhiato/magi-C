@@ -620,7 +620,59 @@ class Lexer:
                 else: state = 315
 
             # INSCRIPTION (103-114), INVOKE (115-119)
+            # inscription (103 - 113)
+            elif state == 103:
+            ‎    if ch == "n": lexeme += self.advance(); state = 104
+            ‎    else: state = 301
+            elif state == 104:
+            ‎    if ch == "s": lexeme += self.advance(); state = 105
+                elif ch == "v": lexeme += self.advance(); state = 115
+            ‎    else: state = 303
+            elif state == 105:
+            ‎    if ch == "c": lexeme += self.advance(); state = 106
+            ‎    else: state = 305
+            elif state == 106:
+            ‎    if ch == "r": lexeme += self.advance(); state = 107
+            ‎    else: state = 307
+            elif state == 107:
+            ‎    if ch == "i": lexeme += self.advance(); state = 108
+            ‎    else: state = 309
+            elif state == 108:
+            ‎    if ch == "p": lexeme += self.advance(); state = 109
+            ‎    else: state = 311
+            elif state == 109:
+            ‎    if ch == "t": lexeme += self.advance(); state = 110
+            ‎    else: state = 313
+            elif state == 110:
+            ‎    if ch == "i": lexeme += self.advance(); state = 111
+            ‎    else: state = 315
+            elif state == 111:
+            ‎    if ch == "o": lexeme += self.advance(); state = 112
+            ‎    else: state = 317
+            elif state == 112:
+            ‎    if ch == "n": lexeme += self.advance(); state = 113
+            ‎    else: state = 319
+            ‎elif state == 113:
+            ‎    if ch in WHITESPACE:
+            ‎        state = 114
+            ‎        return Token("RW_INSCRIPTION", lexeme, self.line, start_col)
+            ‎    else: state = 321
             
+            # invoke (115-118)
+            elif state == 115:
+            ‎    if ch == "o": lexeme += self.advance(); state = 116
+            ‎    else: state = 305
+            elif state == 116:
+            ‎    if ch == "k": lexeme += self.advance(); state = 117
+            ‎    else: state = 307
+            elif state == 117:
+            ‎    if ch == "e": lexeme += self.advance(); state = 118
+            ‎    else: state = 309
+            ‎elif state == 118:
+            ‎    if ch in CURLY_DEL:
+            ‎        state = 119
+            ‎        return Token("RW_INVOKE", lexeme, self.line, start_col)
+            ‎    else: state = 311
 
             # manifest (200-208)
             elif state == 120:
@@ -691,8 +743,56 @@ class Lexer:
                     return Token("RW_PERSIST", lexeme, self.line, start_col)
                 else: state = 313
 
-            # RUNE (222-226), REMANIFEST (227-236)
+            # RUNE (142-146), REMANIFEST (147-156)
+            elif state == 142:
+                if ch == "u": lexeme += self.advance(); state = 143
+                elif ch == "e": lexeme += self.advance(); state = 147 
+                else: state = 301
             
+            # rune (142-145)
+            elif state == 143:
+                if ch == "n": lexeme += self.advance(); state = 144
+                else: state = 303
+            elif  state == 144:
+                if ch == "e": lexeme += self.advance(); state = 145
+                else: state = 305
+            elif state == 145:
+                if ch in WHITESPACE:
+                    state = 146
+                    return Token("RW_RUNE", lexeme, self.line, start_col)
+                else: state = 307
+            
+            # remanifest (147-155)
+            elif state == 147:
+                if ch == "m": lexeme += self.advance(); state = 148
+                else: state = 303
+            elif state == 148:
+                if ch == "a": lexeme += self.advance(); state = 149
+                else: state = 305
+            elif state == 149:
+                if ch == "n": lexeme += self.advance(); state = 150
+                else: state = 307
+            elif state == 150:
+                if ch == "i": lexeme += self.advance(); state = 151
+                else: state = 309
+            elif state == 151:
+                if ch == "f": lexeme += self.advance(); state = 152
+                else: state = 311
+            elif state == 152:
+                if ch == "e": lexeme += self.advance(); state = 153
+                else: state = 313
+            elif state == 153:
+                if ch == "s": lexeme += self.advance(); state = 154
+                else: state = 315
+            elif state == 154:
+                if ch == "t": lexeme += self.advance(); state = 155
+                else: state = 317
+            elif state == 155:
+                if ch in PAREN_DEL:
+                    state = 156
+                    return Token("RW_REMANIFEST", lexeme, self.line, start_col)
+              else: state = 319
+         
             # SCROLL (237-243), SEALED (244-249), SHATTER (250-256), SPELL (257-261), SUMMON (262-267)
 
             # yield (268-273)
